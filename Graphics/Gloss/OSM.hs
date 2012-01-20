@@ -1,3 +1,14 @@
+-- |The OSM module for Gloss will download and cache map tiles
+-- and provides easy display of maps using Gloss 'Picture's.
+--
+-- For example:
+--
+-- @
+--  p <- buildOSMBackground (1280,1024) black 16 (pt 45 (-122.5) Nothing Nothing)
+--  display (FullScreen (1280,1024)) white p
+-- @
+--
+-- Will build a map of the given lat/lon center.  (Note: 'pt' i
 module Graphics.Gloss.OSM
        ( -- * The main function of use builds a picture using OSM tiles
          buildOSMBackground
