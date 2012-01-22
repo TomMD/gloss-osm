@@ -47,7 +47,6 @@ buildOSMBackground (w,h) color zoom center = do
       imgToPic = either (const (256,256,defaultTile)) id . fmap (repaToPicture True . imgData)
       (x,y,grid') = replaceIncorrectTiles defaultTile grid
       pic = gridToPicture 256 256 grid'
---  let pic = gridToPicture 256 256 [[Text ((show x) ++ "-" ++ (show y)) | x <- [0..10]] | y <- [0..10] ] 
   return pic
 
 replaceIncorrectTiles :: Picture -> [[(Int, Int, Picture)]] -> (Int, Int, [[Picture]])

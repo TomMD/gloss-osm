@@ -22,7 +22,7 @@ Cabal-version:       >=1.6
 Library
   Exposed-modules:     Graphics.Gloss.OSM
   Build-depends:       base >= 4 && < 5
-                     , osm-download < 0.2
+                     , osm-download >= 0.2 && < 0.3
                      , http-types >= 0.6 && < 0.7
                      , repa >= 2.0 && < 2.3
                      , repa-bytestring >= 2.0 && < 2.3
