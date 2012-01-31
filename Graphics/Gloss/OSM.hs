@@ -51,7 +51,7 @@ startService = do
   let lru = LRU.newLRU (Just 384) -- Max of 256MB in the LRU
   req  <- newTBChanIO 1
   resp <- newTBChanIO 1
-  frameRef <- newIORef (Pictures [])
+  frameRef <- newIORef (Text "Loading")
   cfgD <- defaultOSMConfig
   let cfg = cfgD { noCacheAction = Just $ \_ _ -> return (Left status501) }
   forkIO (evalOSM (serve lru req resp) cfg)
@@ -114,7 +114,7 @@ foldMap :: Monad m => (a -> t -> m (a,p)) -> a -> [t] -> m (a, [p])
 foldMap op a ts = go a ts
  where
   go a []     = return (a,[])
-  go a (t:ts) = op a t >>= \(a',p) -> go a ts >>= \(aF,pF) -> return (aF,p:pF)
+  go a (t:ts) = op a t >>= \(a',p) -> go a' ts >>= \(aF,pF) -> return (aF,p:pF)
 
 decodeImageE :: Either a ByteString -> Either String (Img RGBA)
 decodeImageE (Right i) = decodeImageRGBA i
@@ -188,3 +188,4 @@ gridToPicture x y arrs =
                     . map (\(c,a) -> Translate (c*xF) 0 a)
                     . (\x -> zip [genericLength x / (-2)..] x)
   in Pictures rows
+

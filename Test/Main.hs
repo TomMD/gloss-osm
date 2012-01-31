@@ -3,6 +3,7 @@ import qualified Graphics.Gloss.OSM as OSM
 import Graphics.Gloss.Interface.IO.Simulate
 -- import Graphics.Gloss.Interface.Animate
 import Data.GPS
+import Control.Concurrent (threadDelay)
 
 main = do
   svc <- OSM.startService
@@ -13,4 +14,4 @@ main = do
       serve _ = do
          p <- OSM.serveBackground svc wh zoom pnt
          return (Pictures [p,center])
-  simulateIO (FullScreen wh) white 1 () serve (\ _ _ _ -> return ())
+  simulateIO (FullScreen wh) white 30 () serve (\ _ _ _ -> return ())
