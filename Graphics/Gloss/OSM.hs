@@ -31,7 +31,7 @@ import Data.Word
 import Graphics.Gloss
 import Network.HTTP.Types (status501)
 import Network.OSM
-import Data.Array.Repa ((:.)(..), Z, Z(..), extent, backpermute, DIM1, DIM0, DIM3, Array)
+import Data.Array.Repa ((:.)(..), Z, Z(..), extent, DIM3, Array)
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.ByteString as RB
 import Data.IORef
@@ -117,7 +117,7 @@ foldMap op a ts = go a ts
   go a (t:ts) = op a t >>= \(a',p) -> go a' ts >>= \(aF,pF) -> return (aF,p:pF)
 
 decodeImageE :: Either a ByteString -> Either String (Img RGBA)
-decodeImageE (Right i) = decodeImageRGBA i
+decodeImageE (Right i) = fmap flipVertically (decodeImageRGBA i)
 decodeImageE (Left _)  = Left ""
 
 buildBackground :: (Coordinate a) => 
