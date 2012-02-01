@@ -4,20 +4,27 @@
 -- For example:
 --
 -- @
---  p <- buildOSMBackground (1280,1024) black 16 (pt 45 (-122.5) Nothing Nothing)
+--  p <- buildOSMBackground black (Frame 1280 1024 (pt 45 (-122.5) Nothing Nothing) 16)
 --  display (FullScreen (1280,1024)) white p
 -- @
 --
--- Will build a map of the given lat/lon center.  (Note: 'pt' i
+-- Will build a map of the given lat/lon center.  (Note: 'pt' is from the 'GPX' package)
 module Graphics.Gloss.OSM
-       ( -- * Recommended Service-Based Interface
-         startService
+       ( -- * Types
+         Frame(..)
+       , OSMService
+       , Zoom
+         -- * Recommended Service-Based Interface
+       , startService
        , serveBackground
+       , flushCache
          -- * Single-Request Interface
        , buildOSMBackground
          -- * Utility functions
        , gridToPicture
        , repaToPicture
+         -- * Re-exported Utility
+       , pt, Pt
        ) where
 
 import Codec.Picture.Repa
@@ -40,17 +47,25 @@ import qualified Data.Cache.LRU as LRU
 import Data.ByteString (ByteString)
 
 type RenderCache = LRU (TileID,Zoom) Picture
-type OSMService a transactionId = (TBChan ((Int, Int), Zoom, a, transactionId)
-                                  ,TBChan (Picture, transactionId)
-                                  ,IORef Picture)
+data OSMCmd a transactionId = FlushCache | GetFrame (Frame a) transactionId
 
+type OSMService a tId = (TBChan (OSMCmd a tId)
+                        ,TBChan (Picture, tId)
+                        ,IORef Picture)
+
+-- |A cache of 384 RGBA decoded tiles should fit in ~128MB of RAM
+lruSize :: Integer
+lruSize = 384
+
+-- |Run a service providing OpenStreetMap images, allowing the actual
+-- images to be acquired via 'serveBackground'.
 startService :: Coordinate a => IO (OSMService a t)
 startService = do
   -- The bound is low because we shouldn't be even one request behind
   -- in this task.  Almost worth making it an MVar Either.
-  let lru = LRU.newLRU (Just 384) -- Max of 256MB in the LRU
-  req  <- newTBChanIO 1
-  resp <- newTBChanIO 1
+  let lru = LRU.newLRU (Just lruSize)
+  req  <- newTBChanIO 4
+  resp <- newTBChanIO 4
   frameRef <- newIORef (Text "Loading")
   cfgD <- defaultOSMConfig
   let cfg = cfgD { noCacheAction = Just $ \_ _ -> return (Left status501) }
@@ -59,38 +74,52 @@ startService = do
   where
     -- serve :: TBChan a -> OSM ()
     serve lru req resp = do
-      (wh,zoom,center,t) <- liftIO (atomically (readTBChan req))
-      (pic,lru') <- buildBackgroundLRU lru wh black zoom center
-      liftIO (atomically (writeTBChan resp (pic,t)))
-      serve lru' req resp
+      cmd <- liftIO (atomically (readTBChan req))
+      case cmd of
+        FlushCache -> serve (LRU.newLRU (Just lruSize)) req resp
+        GetFrame frm t -> do
+          (pic,lru') <- buildBackgroundLRU lru black frm
+          liftIO (atomically (writeTBChan resp (pic,t)))
+          serve lru' req resp
 
-serveBackground :: OSMService a () -> (Int, Int) -> Zoom -> a -> IO Picture
-serveBackground (req,resp,prevRef) wh zoom center = do
+-- |A blocking operation that will flush the LRU cache.  This will NOT
+-- flush the local, sqlite, persistent on-disk cache, but only the
+-- in-memory decoding of that on-disk cache.  This is useful if the
+-- persistent data has changed and that change is not being reflected
+-- by the served pictures.  No mechanism currently exists to flush the
+-- on-disk cache (part of 'osm-download').
+flushCache :: OSMService a () -> IO ()
+flushCache (req,_,_) = atomically $ writeTBChan req FlushCache
+
+-- |Non-blocking.  Issues a request for a background, returning the
+-- first frame available from 'osm-download'.  If no frame is
+-- available then it uses the previously returned frame (which could be
+-- an initial "Loading" text).
+serveBackground :: OSMService a () -> Frame a -> IO Picture
+serveBackground (req,resp,prevRef) frm = do
   mp <- atomically $ do
-    tryWriteTBChan req (wh,zoom,center,())
+    tryWriteTBChan req (GetFrame frm ())
     tryReadTBChan resp
   case mp of 
     Just (p,_) -> writeIORef prevRef p >> return p
     Nothing    -> readIORef prevRef
 
--- FIXME make an in-memory LRU cache of decoded tiles that we use
--- instead of hitting the acid-state and decoding every time!
 buildBackgroundLRU :: (Coordinate a) => 
      RenderCache ->
      -- A cache of map tiles
-     (Int, Int) ->
-     -- The window width and height
      Color ->
      -- default background color
-     Zoom ->
-     a ->
+     Frame a ->
      -- Screen Center
      OSM IO (Picture,RenderCache)
-buildBackgroundLRU lru wh color zoom center = do
-  let tileIDs = selectTilesWithFixedDimensions wh center zoom
-      defaultTile = Color color $ Polygon [(0,256), (256,256), (256,0), (0,0)]
+buildBackgroundLRU lru color (Frame w h center zoom) = do
+  let frame = Frame w h center zoom
+      tileIDs = selectTilesForFrame frame
+      (cx,cy) = pixelPositionForFrame frame center
+      (dx,dy) = ( fromIntegral (-cx)
+                , fromIntegral cy) 
   (lru',grid) <- getTilesWithLRU lru tileIDs
-  return (gridToPicture 256 256 grid, lru')
+  return (Translate dx dy (gridToPicture 256 256 grid), lru')
  where
   defaultTile :: Picture
   defaultTile = Color color (Polygon [(0,256),(256,256),(256,0),(0,0)])
@@ -107,7 +136,7 @@ buildBackgroundLRU lru wh color zoom center = do
                   . fmap ((\(_,_,p) -> p) . repaToPicture True . imgData)
                   . decodeImageE
                   $ esb
-              lruFinal = LRU.insert (t,zoom) pic lru'
+              lruFinal = if pic == defaultTile then lru' else LRU.insert (t,zoom) pic lru'
           return (lruFinal,pic)
 
 foldMap :: Monad m => (a -> t -> m (a,p)) -> a -> [t] -> m (a, [p])
@@ -127,7 +156,7 @@ buildBackground :: (Coordinate a) =>
      a ->                             -- Screen Center
      OSM IO Picture
 buildBackground wh color zoom center = do
-  let tileIDs = selectTilesWithFixedDimensions wh center zoom
+  let tileIDs = selectTilesForFrame (Frame (fst wh) (snd wh) center zoom)
       defaultTile = Color color $ Polygon [(0,256), (256,256), (256,0), (0,0)]
   ts <- getTiles tileIDs zoom
   let grid :: [[(Int,Int,Picture)]]
@@ -180,12 +209,12 @@ repaToPicture b arr = (col, row, bitmapOfByteString row col (RB.toByteString arr
 -- @
 gridToPicture :: Int -> Int -> [[Picture]] -> Picture
 gridToPicture x y arrs =
-  let rows = map (\(r,a) -> Translate 0 (r*yF) (adjustColumns a)) (zip [(genericLength arrs / (-2))..] arrs)
+  let rows = map (\(r,a) -> Translate 0 (r*yF) (adjustColumns a)) (zip [1..] arrs)
       yF = (-1) * fromIntegral y
       xF = fromIntegral x
       adjustColumns :: [Picture] -> Picture
       adjustColumns = Pictures
                     . map (\(c,a) -> Translate (c*xF) 0 a)
-                    . (\x -> zip [genericLength x / (-2)..] x)
+                    . (\x -> zip [1..] x)
   in Pictures rows
 

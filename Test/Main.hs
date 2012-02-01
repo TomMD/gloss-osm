@@ -9,9 +9,11 @@ main = do
   svc <- OSM.startService
   let wh   = (1680,1050)
       zoom = 16
-      pnt  = (pt 45.5 (-122.5787) Nothing Nothing)
+      pnt  = downtownElsewhere
+      downtownSomewhere = pt 45.523 (-122.69) Nothing Nothing
+      downtownElsewhere = pt 45.522 (-122.688) Nothing Nothing
       center = Color red (circleSolid 10)
       serve _ = do
-         p <- OSM.serveBackground svc wh zoom pnt
+         p <- OSM.serveBackground svc (OSM.Frame (fst wh) (snd wh) pnt zoom)
          return (Pictures [p,center])
   simulateIO (FullScreen wh) white 30 () serve (\ _ _ _ -> return ())
