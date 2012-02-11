@@ -33,6 +33,7 @@ serveWorld (EventKey (SpecialKey k) _ _ _) world@(W (Frame w h c z)) =
                 KeyRight -> Just east
                 KeyUp -> Just north
                 KeyDown -> Just south
+                _       -> Nothing
       c' = fmap (\h -> addVector (40,h) c) hd
   in case c' of
       Nothing -> return world

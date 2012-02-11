@@ -111,7 +111,7 @@ buildBackgroundLRU :: (Coordinate a) =>
      -- default background color
      Frame a ->
      -- Screen Center
-     OSM IO (Picture,RenderCache)
+     OSM (Picture,RenderCache)
 buildBackgroundLRU lru color (Frame w h center zoom) = do
   let frame = Frame w h center zoom
       tileIDs = selectTilesForFrame frame
@@ -123,9 +123,9 @@ buildBackgroundLRU lru color (Frame w h center zoom) = do
  where
   defaultTile :: Picture
   defaultTile = Color color (Polygon [(0,256),(256,256),(256,0),(0,0)])
-  getTilesWithLRU :: RenderCache -> [[TileID]] -> OSM IO (RenderCache, [[Picture]])
+  getTilesWithLRU :: RenderCache -> [[TileID]] -> OSM (RenderCache, [[Picture]])
   getTilesWithLRU lru xs = foldMap (foldMap getTileWithLRU) lru xs
-  getTileWithLRU :: RenderCache -> TileID -> OSM IO (RenderCache,Picture)
+  getTileWithLRU :: RenderCache -> TileID -> OSM (RenderCache,Picture)
   getTileWithLRU lru t =
    case LRU.lookup (t,zoom) lru of
       (lru', Just p)  -> return (lru',p)
@@ -154,7 +154,7 @@ buildBackground :: (Coordinate a) =>
      Color ->                         -- default background color
      Zoom ->
      a ->                             -- Screen Center
-     OSM IO Picture
+     OSM Picture
 buildBackground wh color zoom center = do
   let tileIDs = selectTilesForFrame (Frame (fst wh) (snd wh) center zoom)
       defaultTile = Color color $ Polygon [(0,256), (256,256), (256,0), (0,0)]
