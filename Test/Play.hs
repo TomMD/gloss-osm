@@ -1,7 +1,7 @@
 #!/usr/bin/env runhaskell
 import Graphics.Gloss.OSM as OSM
 import Graphics.Gloss.Interface.IO.Game
-import Data.GPS
+import Geo.Computations as Geo
 import Control.Concurrent (threadDelay)
 import System.Exit
 
@@ -23,7 +23,7 @@ renderWorld svc (W f) = serveBackground svc f
 stepWorld :: Float -> World a -> IO (World a)
 stepWorld _ w = return w
 
-serveWorld :: Coordinate a => Event -> World a -> IO (World a)
+serveWorld :: Event -> World Geo.Point -> IO (World Geo.Point)
 serveWorld (EventKey (MouseButton WheelUp) _ _ _) (W (Frame w h c z)) =
   return (W (Frame w h c (z + 1)))
 serveWorld (EventKey (MouseButton WheelDown) _ _ _) (W (Frame w h c z)) =

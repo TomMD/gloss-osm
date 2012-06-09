@@ -23,8 +23,6 @@ module Graphics.Gloss.OSM
          -- * Utility functions
        , gridToPicture
        , repaToPicture
-         -- * Re-exported Utility
-       , pt, Pt
        ) where
 
 import Codec.Picture.Repa
@@ -32,7 +30,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TBChan
 import Control.Monad
 import Control.Concurrent.MonadIO
-import Data.GPS
+import Geo.Computations as Geo
 import Data.List (genericLength)
 import Data.Word
 import Graphics.Gloss
@@ -40,11 +38,12 @@ import Network.HTTP.Types (status501)
 import Network.OSM
 import Data.Array.Repa ((:.)(..), Z, Z(..), extent, DIM3, Array)
 import qualified Data.Array.Repa as R
-import qualified Data.Array.Repa.ByteString as RB
+import qualified Data.Array.Repa.Repr.ForeignPtr as F
 import Data.IORef
 import Data.Cache.LRU (LRU)
 import qualified Data.Cache.LRU as LRU
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Internal as BI -- (fromForeignPtr)
 
 type RenderCache = LRU (TileID,Zoom) Picture
 data OSMCmd a transactionId = FlushCache | GetFrame (Frame a) transactionId
@@ -59,7 +58,7 @@ lruSize = 384
 
 -- |Run a service providing OpenStreetMap images, allowing the actual
 -- images to be acquired via 'serveBackground'.
-startService :: Coordinate a => IO (OSMService a t)
+startService :: IO (OSMService Geo.Point t)
 startService = do
   -- The bound is low because we shouldn't be even one request behind
   -- in this task.  Almost worth making it an MVar Either.
@@ -104,12 +103,12 @@ serveBackground (req,resp,prevRef) frm = do
     Just (p,_) -> writeIORef prevRef p >> return p
     Nothing    -> readIORef prevRef
 
-buildBackgroundLRU :: (Coordinate a) => 
+buildBackgroundLRU ::
      RenderCache ->
      -- A cache of map tiles
      Color ->
      -- default background color
-     Frame a ->
+     Frame Geo.Point ->
      -- Screen Center
      OSM (Picture,RenderCache)
 buildBackgroundLRU lru color (Frame w h center zoom) = do
@@ -149,11 +148,11 @@ decodeImageE :: Either a ByteString -> Either String (Img RGBA)
 decodeImageE (Right i) = fmap flipVertically (decodeImageRGBA i)
 decodeImageE (Left _)  = Left ""
 
-buildBackground :: (Coordinate a) => 
+buildBackground ::
      (Int, Int) ->                    -- The window width and height
      Color ->                         -- default background color
      Zoom ->
-     a ->                             -- Screen Center
+     Geo.Point ->                             -- Screen Center
      OSM Picture
 buildBackground wh color zoom center = do
   let tileIDs = selectTilesForFrame (Frame (fst wh) (snd wh) center zoom)
@@ -175,7 +174,7 @@ buildBackground wh color zoom center = do
 -- You should not call 'buildOSMBackground', which runs an OSM monad from 'osm-downloader'
 -- with any regularity (ex: not on a per-frame basis).  Doing so can get you banned from
 -- OSM tile server services. Consider the service interface, above.
-buildOSMBackground :: (Coordinate a) => (Int,Int) -> Color -> Zoom -> a -> IO Picture
+buildOSMBackground :: (Int,Int) -> Color -> Zoom -> Geo.Point -> IO Picture
 buildOSMBackground wh color zoom center = do
   cfgD <- defaultOSMConfig
   let cfg = cfgD { noCacheAction = Just $ \_ _ -> return (Left status501) }
@@ -192,10 +191,14 @@ replaceIncorrectTiles p ps@((a:as):xs) =
 -- |Convert a repa RGBA array into a 'gloss' 'Picture' assumes the
 -- array shape is @(Z :. columns :. rows :. color channel)@ where the
 -- color channel is RGBA (vs ABGR, which many OpenGL formats use).
-repaToPicture :: Bool -> Array DIM3 Word8 -> (Int, Int, Picture)
-repaToPicture b arr = (col, row, bitmapOfByteString row col (RB.toByteString arr) b)
+repaToPicture :: Bool -> Array F.F DIM3 Word8 -> (Int, Int, Picture)
+repaToPicture b arr = 
+	let fptr = F.toForeignPtr arr
+	    bs   = BI.fromForeignPtr fptr 0 len
+	in (col, row, bitmapOfByteString row col bs b)
  where
-   (Z :. row :. col :. _) = extent arr
+  len = row * col * depth
+  (Z :. row :. col :. depth) = extent arr
 
 -- | Given a list of list of pictures in a grid format, place them all
 -- in a grid taking the inner list as rows and the elements to

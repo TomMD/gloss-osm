@@ -2,7 +2,7 @@
 import qualified Graphics.Gloss.OSM as OSM
 import Graphics.Gloss.Interface.IO.Simulate
 -- import Graphics.Gloss.Interface.Animate
-import Data.GPS
+import Geo.Computations
 import Control.Concurrent (threadDelay)
 
 main = do
