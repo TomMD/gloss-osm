@@ -46,7 +46,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as BI -- (fromForeignPtr)
 
 type RenderCache = LRU (TileID,Zoom) Picture
-data OSMCmd a transactionId = FlushCache | GetFrame (Frame a) transactionId
+data OSMCmd a transactionId = FlushCache | GetFrame Frame transactionId
 
 type OSMService a tId = (TBChan (OSMCmd a tId)
                         ,TBChan (Picture, tId)
@@ -94,7 +94,7 @@ flushCache (req,_,_) = atomically $ writeTBChan req FlushCache
 -- first frame available from 'osm-download'.  If no frame is
 -- available then it uses the previously returned frame (which could be
 -- an initial "Loading" text).
-serveBackground :: OSMService a () -> Frame a -> IO Picture
+serveBackground :: OSMService a () -> Frame -> IO Picture
 serveBackground (req,resp,prevRef) frm = do
   mp <- atomically $ do
     tryWriteTBChan req (GetFrame frm ())
@@ -108,13 +108,13 @@ buildBackgroundLRU ::
      -- A cache of map tiles
      Color ->
      -- default background color
-     Frame Geo.Point ->
+     Frame ->
      -- Screen Center
      OSM (Picture,RenderCache)
 buildBackgroundLRU lru color (Frame w h center zoom) = do
   let frame = Frame w h center zoom
       tileIDs = selectTilesForFrame frame
-      (cx,cy) = pixelPositionForFrame frame center
+      (cx,cy) = point2pixel frame center
       (dx,dy) = ( fromIntegral (-cx)
                 , fromIntegral cy) 
   (lru',grid) <- getTilesWithLRU lru tileIDs

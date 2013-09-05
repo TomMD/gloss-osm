@@ -22,17 +22,16 @@ Cabal-version:       >=1.6
 Library
   Exposed-modules:     Graphics.Gloss.OSM
   Build-depends:       base >= 4 && < 5
-                     , osm-download >= 0.4 && < 0.5
-                     , http-types >= 0.6 && < 0.7
-                     , repa >= 3.0 && < 3.1
-                     , gloss >= 1.7 && < 1.8
-                     , gps >= 1.1 && < 1.2
-                     , JuicyPixels-repa >= 0.3 && < 0.4
-                     , stm >= 2.2 && < 2.4
-                     , stm-chans >= 1.2 && < 1.4
-                     , monadIO >= 0.10 && < 0.11
-                     , lrucache >= 1.1 && < 1.2
-                     , bytestring >= 0.9 && < 1.1
+                     , osm-download >= 0.4
+                     , http-types >= 0.7
+                     , gloss >= 1.7
+                     , gps >= 1.1
+                     , JuicyPixels-repa >= 0.6, repa
+                     , stm >= 2.2
+                     , stm-chans >= 1.2
+                     , monadIO >= 0.10
+                     , lrucache >= 1.1
+                     , bytestring >= 0.9
   
   -- Modules not exported by this package.
   -- Other-modules:       
