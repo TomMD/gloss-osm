@@ -145,7 +145,8 @@ foldMap op a ts = go a ts
   go a (t:ts) = op a t >>= \(a',p) -> go a' ts >>= \(aF,pF) -> return (aF,p:pF)
 
 decodeImageE :: Either a ByteString -> Either String (Img RGBA)
-decodeImageE (Right i) = fmap flipVertically (decodeImageRGBA i)
+decodeImageE (Right i) = either Left (Right . onImg flipVertically)
+                                   (decodeImageRGBA i)
 decodeImageE (Left _)  = Left ""
 
 buildBackground ::
